@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Bloob vs Boxes</title>
+    <script src="https://telegram.org"></script>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; }
+        body, html { width: 100%; height: 100%; overflow: hidden; background: #e0f2f1; font-family: sans-serif; }
+        
+        /* Игровая зона в стиле твоих картинок */
+        #game-container { width: 100%; height: 100%; position: relative; background: linear-gradient(to bottom, #dcedc8, #fff9c4); }
+        
+        /* Небо и облака */
+        .sky-bg { position: absolute; width: 100%; height: 70%; background: #e0f7fa; z-index: 1; }
+        
+        /* Платформа (зеленая плитка) */
+        #platform { position: absolute; bottom: 0; width: 100%; height: 30%; background: #a5d6a7; border-top: 5px solid #81c784; z-index: 2; display: grid; grid-template-columns: repeat(3, 1fr); border-collapse: collapse; }
+        .tile { border: 1px solid #c8e6c9; }
+
+        /* Интерфейс */
+        #ui { position: absolute; top: 20px; left: 0; width: 100%; display: flex; justify-content: space-between; padding: 0 20px; z-index: 10; font-size: 20px; font-weight: bold; color: #37474f; }
+        
+        /* Персонаж Блуб */
+        #bloob {
+            position: absolute;
+            bottom: 30%; /* Стоит ровно на платформе */
+            left: 50%;
+            width: 70px;
+            height: 60px;
+            background: #fff59d;
+            border: 3px solid #5d4037;
+            border-radius: 50% 50% 45% 45%;
+            transform: translateX(-50%);
+            transition: width 0.1s, height 0.1s, border-radius 0.1s, bottom 0.1s;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: inset -5px -5px 0px rgba(0,0,0,0.1);
+        }
+        
+        /* Глазки Блуба */
+        #bloob::before, #bloob::after { content: ''; position: absolute; width: 6px; height: 6px; background: #000; border-radius: 50%; top: 50%; }
+        #bloob::before { left: 22px; }
+        #bloob::after { right: 22px; }
+
+        /* Состояние: Сплющился в блинчик 🥞 */
+        #bloob.flattened {
+            width: 120px;
+            height: 15px;
+            border-radius: 100px / 20px;
+            bottom: 30%;
+        }
+        #bloob.flattened::before { left: 40px; top: 3px; }
+        #bloob.flattened::after { right: 40px; top: 3px; }
+
+        /* Падающая коробка */
+        .box {
+            position: absolute;
+            width: 50px;
+            height: 50px;
+            background: #bcaaa4;
+            border: 3px solid #4e342e;
+            border-radius: 8px;
+            z-index: 4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        /* Лента на коробке для красоты */
+        .box::after { content: ''; position: absolute; width: 10px; height: 100%; background: #8d6e63; }
+
+        /* Зоны для тач-управления */
+        .touch-zone { position: absolute; top: 0; width: 50%; height: 100%; z-index: 20; }
+        #left-zone { left: 0; }
+        #right-zone { right: 0; }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div class="sky-bg"></div>
+        
+        <div id="ui">
+            <div id="score-box">Очки: 0</div>
+            <div id="lives-box">Рекорд: <span id="highscore">0</span></div>
+        </div>
+
+        <div id="bloob"></div>
+
+        <div id="platform">
+            <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+        </div>
+
+        <!-- Кнопки управления на весь экран -->
+        <div id="left-zone" class="touch-zone"></div>
+        <div id="right-zone" class="touch-zone"></div>
+    </div>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+
+        const bloob = document.getElementById('bloob');
+        const container = document.getElementById('game-container');
+        const scoreBox = document.getElementById('score-box');
+        const highscoreBox = document.getElementById('highscore');
+
+        let score = 0;
+        let highscore = localStorage.getItem('bloob_highscore') || 0;
+        highscoreBox.innerText = highscore;
+
+        let bloobX = window.innerWidth / 2;
+        const bloobSpeed = 7;
+        let moveDirection = 0; // -1 влево, 1 вправо, 0 стоп
+        let isFlattened = false;
+
+        // Позиционируем Блуба на старте
+        function updateBloobPosition() {
+            if (!isFlattened && moveDirection !== 0) {
+                bloobX += moveDirection * bloobSpeed;
+                // Ограничения экрана
+                if (bloobX < 35) bloobX = 35;
+                if (bloobX > window.innerWidth - 35) bloobX = window.innerWidth - 35;
+                bloob.style.left = bloobX + 'px';
+            }
+            requestAnimationFrame(updateBloobPosition);
+        }
+        bloob.style.left = bloobX + 'px';
+        updateBloobPosition();
+
+        // Тачи для телефонов
+        document.getElementById('left-zone').addEventListener('touchstart', () => moveDirection = -1);
+        document.getElementById('left-zone').addEventListener('touchend', () => moveDirection = 0);
+        document.getElementById('right-zone').addEventListener('touchstart', () => moveDirection = 1);
+        document.getElementById('right-zone').addEventListener('touchend', () => moveDirection = 0);
+
+        // Мышка для тестов на ПК
+        document.getElementById('left-zone').addEventListener('mousedown', () => moveDirection = -1);
+        document.getElementById('left-zone').addEventListener('mouseup', () => moveDirection = 0);
+        document.getElementById('right-zone').addEventListener('mousedown', () => moveDirection = 1);
+        document.getElementById('right-zone').addEventListener('mouseup', () => moveDirection = 0);
+
+        // Спавн коробок
+        let boxes = [];
+        let spawnInterval = 1200;
+
+        function spawnBox() {
+            if (isFlattened) return;
+            
+            const box = document.createElement('div');
+            box.classList.add('box');
+            box.style.left = Math.random() * (window.innerWidth - 50) + 'px';
+            box.style.top = '-50px';
+            container.appendChild(box);
+
+            boxes.push({
+                element: box,
+                y: -50,
+                x: parseFloat(box.style.left),
+                speed: 4 + Math.random() * 4
+            });
+        }
+
+        let gameLoop = setInterval(() => {
+            spawnBox();
+        }, spawnInterval);
+
+        function updateBoxes() {
+            const platformTop = window.innerHeight * 0.7;
+
+            for (let i = boxes.length - 1; i >= 0; i--) {
+                let box = boxes[i];
+                box.y += box.speed;
+                box.element.style.top = box.y + 'px';
+
+                // Проверка столкновения с Блубом
+                let distY = Math.abs((box.y + 25) - (platformTop - 30));
+                let distX = Math.abs((box.x + 25) - bloobX);
+
+                if (distY < 40 && distX < 45 && !isFlattened) {
+                    flattenBloob();
+                    box.element.remove();
+                    boxes.splice(i, 1);
+                    continue;
+                }
+
+                # Если коробка упала на землю
+                if (box.y > platformTop - 50) {
+                    box.element.remove();
+                    boxes.splice(i, 1);
+                    if (!isFlattened) {
+                        score += 10;
+                        scoreBox.innerText = "Очки: " + score;
+                    }
+                }
+            }
+            requestAnimationFrame(updateBoxes);
+        }
+        updateBoxes();
+
+        // Логика сплющивания Блуба в блинчик 
+        function flattenBloob() {
+            isFlattened = true;
+            bloob.classList.add('flattened');
+            if(tg.HapticFeedback) tg.HapticFeedback.notificationOccurred('error'); // Тряска телефона!
+
+            // Обновляем рекорд
+            if (score > highscore) {
+                highscore = score;
+                localStorage.setItem('bloob_highscore', highscore);
+                highscoreBox.innerText = highscore;
+                // Отправляем новый рекорд в бота
+                tg.sendData(JSON.stringify({highscore: highscore}));
+            }
+
+            score = 0;
+            scoreBox.innerText = "Очки: 0";
+
+            // Через 1.5 секунды Блуб восстанавливает форму
+            setTimeout(() => {
+                bloob.classList.remove('flattened');
+                isFlattened = false;
+            }, 1500);
+        }
+    </script>
+</body>
+</html>
