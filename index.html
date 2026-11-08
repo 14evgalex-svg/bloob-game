@@ -187,7 +187,8 @@
                     continue;
                 }
 
-                # Если коробка упала на землю
+                // Если коробка упала на землю
+
                 if (box.y > platformTop - 50) {
                     box.element.remove();
                     boxes.splice(i, 1);
